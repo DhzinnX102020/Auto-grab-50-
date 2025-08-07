@@ -1,0 +1,126 @@
+-- GUI com botão Grab customizado e arrastável com 1.5s de toque
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "AutoGrabGUI"
+gui.ResetOnSpawn = false
+
+local button = Instance.new("TextButton")
+button.Name = "GrabButton"
+button.Parent = gui
+
+-- Estilo do botão
+button.Size = UDim2.new(0, 100, 0, 80)
+button.Position = UDim2.new(0, 20, 0, 200)
+button.Text = "Grab"
+button.TextColor3 = Color3.new(1, 1, 1)
+button.Font = Enum.Font.SourceSansBold
+button.TextSize = 18
+button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+button.Active = true
+
+-- Imagem de fundo
+local image = Instance.new("ImageLabel")
+image.Parent = button
+image.Size = UDim2.new(1, 0, 1, 0)
+image.Position = UDim2.new(0, 0, 0, 0)
+image.BackgroundTransparency = 1
+image.Image = "rbxassetid://114965411815071"
+image.ImageTransparency = 0.3
+image.ZIndex = 1
+button.ZIndex = 2
+
+-- Ativar/desativar grab
+local ativo = false
+button.MouseButton1Click:Connect(function()
+	if not button:GetAttribute("Dragging") then
+		ativo = not ativo
+		button.BackgroundColor3 = ativo and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(255, 0, 0)
+	end
+end)
+
+-- Auto Grab
+local function getNearestPlayer()
+	local Players = game:GetService("Players")
+	local LocalPlayer = Players.LocalPlayer
+	local MyChar = LocalPlayer.Character
+	if not MyChar or not MyChar:FindFirstChild("HumanoidRootPart") then return nil end
+
+	local nearest, shortest = nil, math.huge
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("Head") then
+			local dist = (MyChar.HumanoidRootPart.Position - plr.Character.Head.Position).Magnitude
+			if dist < shortest then
+				shortest = dist
+				nearest = plr
+			end
+		end
+	end
+	return nearest
+end
+
+-- Loop do Auto Grab
+task.spawn(function()
+	while true do
+		task.wait(0.15)
+		if ativo then
+			local target = getNearestPlayer()
+			if target and target.Character and target.Character:FindFirstChild("Head") then
+				local head = target.Character.Head
+				local args = {
+					[1] = head,
+					[2] = "Grab",
+					[3] = head.Position,
+					[4] = head.CFrame
+				}
+				pcall(function()
+					game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("Grab"):FireServer(unpack(args))
+				end)
+			end
+		end
+	end
+end)
+
+-- Arrastar com o dedo após 1.5s segurando
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+
+local dragging = false
+local dragStart, startPos
+local holdTime = 0
+local holding = false
+
+button.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		dragStart = input.Position
+		startPos = button.Position
+		holdTime = 0
+		holding = true
+
+		-- Espera 1.5 segundos segurando
+		while holding and holdTime < 1.5 do
+			holdTime += RS.RenderStepped:Wait()
+		end
+
+		if holding then
+			dragging = true
+			button:SetAttribute("Dragging", true)
+		end
+	end
+end)
+
+button.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		holding = false
+		dragging = false
+		button:SetAttribute("Dragging", false)
+	end
+end)
+
+UIS.TouchMoved:Connect(function(input)
+	if dragging then
+		local delta = input.Position - dragStart
+		button.Position = UDim2.new(
+			startPos.X.Scale, startPos.X.Offset + delta.X,
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y
+		)
+	end
+end)
